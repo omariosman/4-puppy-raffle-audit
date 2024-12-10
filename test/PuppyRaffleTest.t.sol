@@ -225,6 +225,7 @@ contract PuppyRaffleTest is Test {
         vm.deal(attackerUser, 1 ether);
         vm.prank(attackerUser);
 
+
         AttackerContract attackerContract = new AttackerContract(puppyRaffle, entranceFee); 
 
         console.log("Starting attacker  balance: ", address(attackerContract).balance);
